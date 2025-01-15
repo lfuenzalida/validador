@@ -1,0 +1,20 @@
+# Archivos de entorno
+.env
+backend_flask/.env
+
+# Dependencias y entornos virtuales
+backend_flask/env
+
+# Archivos de compilación de Python
+__pycache__/
+*.pyc
+*.pyo
+front_pyqt6/__pycache__/
+
+# Archivos de logs y caché
+*.log
+*.cache
+
+# Configuración de VS Code
+.vscode/
+

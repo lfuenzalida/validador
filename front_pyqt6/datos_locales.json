@@ -1,0 +1,96 @@
+{
+    "validadores": [
+        "Marco",
+        "Sebastian",
+        "Victor",
+        "Andreina"
+    ],
+    "conductores": {
+        "Ricardo Ponce": {
+            "recomendada": {
+                "peoneta": "Oliver",
+                "vehiculo": "Mitzubichi fuso"
+            },
+            "opciones": {
+                "peonetas": [
+                    "Oliver",
+                    "Christofer",
+                    "Camilo",
+                    "Sin Peoneta"
+                ],
+                "vehiculos": [
+                    "Mitzubichi fuso",
+                    "Peugot Boxer",
+                    "Mitzubichi fuso chico",
+                    "Peugot Partner"
+                ]
+            }
+        },
+        "Pablo Garcia": {
+            "recomendada": {
+                "peoneta": "Christofer",
+                "vehiculo": "Peugot Boxer"
+            },
+            "opciones": {
+                "peonetas": [
+                    "Oliver",
+                    "Christofer",
+                    "Camilo",
+                    "Sin Peoneta"
+                ],
+                "vehiculos": [
+                    "Mitzubichi fuso",
+                    "Peugot Boxer",
+                    "Mitzubichi fuso chico",
+                    "Peugot Partner"
+                ]
+            }
+        },
+        "Hector": {
+            "recomendada": {
+                "peoneta": "Camilo",
+                "vehiculo": "Mitzubichi fuso chico"
+            },
+            "opciones": {
+                "peonetas": [
+                    "Oliver",
+                    "Christofer",
+                    "Camilo",
+                    "Sin Peoneta"
+                ],
+                "vehiculos": [
+                    "Mitzubichi fuso",
+                    "Peugot Boxer",
+                    "Mitzubichi fuso chico",
+                    "Peugot Partner"
+                ]
+            }
+        },
+        "Esteban": {
+            "recomendada": {
+                "peoneta": "Sin Peoneta",
+                "vehiculo": "Peugot Partner"
+            },
+            "opciones": {
+                "peonetas": [
+                    "Oliver",
+                    "Christofer",
+                    "Camilo",
+                    "Sin Peoneta"
+                ],
+                "vehiculos": [
+                    "Mitzubichi fuso",
+                    "Peugot Boxer",
+                    "Mitzubichi fuso chico",
+                    "Peugot Partner"
+                ]
+            }
+        }
+    },
+    "vehiculos": {
+        "Mitzubichi fuso": "KKL-K82",
+        "Peugot Boxer": "SJX-R58",
+        "Mitzubichi fuso chico": "LJT-B90",
+        "Peugot Partner": "PGB-C23"
+    }
+}
