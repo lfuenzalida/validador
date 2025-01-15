@@ -1,5 +1,6 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QStackedWidget
+from views.home import HomeScreen
 from views.login import LoginScreen
 from views.validation import ValidationScreen
 
@@ -9,32 +10,38 @@ class MainApp(QStackedWidget):
         super().__init__()
         self.setWindowTitle("Validador de Facturas")
 
-        # ** Tamaño de la ventana inicialmente más pequeño **
-        self.setGeometry(100, 100, 500, 300)  # Tamaño de login
+        # ** Tamaño inicial de la ventana **
+        self.setGeometry(100, 100, 500, 300)  # Tamaño inicial para Home
 
-        # Inicializar variables para guardar datos de validación temporalmente
+        # Inicializar variables de validación
         self.datos_validacion = {}
 
         # Inicializar pantallas
+        self.home_screen = HomeScreen(self)
         self.login_screen = LoginScreen(self)
         self.validation_screen = ValidationScreen(self)
 
         # Agregar pantallas al stack
+        self.addWidget(self.home_screen)  # Primera pantalla
         self.addWidget(self.login_screen)
         self.addWidget(self.validation_screen)
 
-        self.setCurrentWidget(self.login_screen)  # Mostrar la pantalla de login al inicio
+        self.setCurrentWidget(self.home_screen)  # Mostrar Home al inicio
+
+    def cambiar_a_login(self):
+        """Cambia de Home a Login."""
+        self.setCurrentWidget(self.login_screen)
 
     def cambiar_a_pantalla_validacion(self):
-        """Cambia de la pantalla de login a la pantalla de validación y expande a fullscreen."""
+        """Cambia de Login a Validación y expande a pantalla completa."""
         self.setCurrentWidget(self.validation_screen)
         self.showMaximized()  # Expande la pantalla a full
         self.validation_screen.cargar_datos_validacion(self.datos_validacion)
 
-    def regresar_a_login(self):
-        """Regresa al login y restaura el tamaño inicial."""
-        self.setCurrentWidget(self.login_screen)
-        self.showNormal()  # Restaura tamaño inicial
+    def regresar_a_home(self):
+        """Regresa a la pantalla de Home."""
+        self.setCurrentWidget(self.home_screen)
+        self.showNormal()
         self.setGeometry(100, 100, 500, 300)  # Restaura tamaño pequeño
 
 

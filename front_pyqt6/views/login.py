@@ -1,6 +1,7 @@
 import json
 import os
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QMessageBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton, QMessageBox, QHBoxLayout
+from PyQt6.QtCore import Qt
 
 
 class LoginScreen(QWidget):
@@ -8,45 +9,67 @@ class LoginScreen(QWidget):
         super().__init__()
         self.main_app = main_app
         self.setWindowTitle("Ingreso de Datos")
-        self.setGeometry(100, 100, 100, 200)
+        self.setGeometry(100, 100, 400, 300)  # Ajustar tamaño de la ventana
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
 
+        # **Título "Despacho" en negrita y grande**
+        self.titulo_label = QLabel("Despacho")
+        self.titulo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)  # Centrar texto horizontalmente
+        self.titulo_label.setStyleSheet("font-size: 24px; font-weight: bold;")  # Espaciado inferior
+        layout.addWidget(self.titulo_label)
+        
+
         # Cargar datos locales
         self.cargar_datos()
 
-        # Selección del validador
+        # **Selección del validador**
         self.label_validador = QLabel("Validador:")
+        self.label_validador.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.combo_validador = QComboBox()
         self.combo_validador.addItems(self.datos["validadores"])
 
-        # Selección del conductor
+        # **Selección del conductor**
         self.label_conductor = QLabel("Conductor:")
+        self.label_conductor.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.combo_conductor = QComboBox()
         self.combo_conductor.addItems(self.datos["conductores"].keys())
         self.combo_conductor.currentTextChanged.connect(self.actualizar_opciones)
 
-        # Selección del peoneta
+        # **Selección del peoneta**
         self.label_peoneta = QLabel("Peoneta:")
+        self.label_peoneta.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.combo_peoneta = QComboBox()
 
-        # Selección del vehículo
+        # **Selección del vehículo**
         self.label_vehiculo = QLabel("Vehículo:")
+        self.label_vehiculo.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.combo_vehiculo = QComboBox()
         self.combo_vehiculo.currentTextChanged.connect(self.actualizar_patente)
 
-        # Selección de la patente (se llena según el vehículo seleccionado)
+        # **Selección de la patente (se llena según el vehículo seleccionado)**
         self.label_patente = QLabel("Patente:")
+        self.label_patente.setStyleSheet("font-size: 15px; font-weight: bold;")
         self.combo_patente = QComboBox()
         self.combo_vehiculo.currentTextChanged.connect(self.actualizar_patente)
 
-        # Botón para continuar
+        # **Botones de acción**
         self.boton_continuar = QPushButton("Continuar")
+        self.boton_continuar.setStyleSheet("background-color: green; color: white; font-weight: bold; padding: 8px;")
         self.boton_continuar.clicked.connect(self.guardar_datos)
 
-        # Agregar widgets al layout
+        self.boton_volver = QPushButton("Volver al Home")
+        self.boton_volver.setStyleSheet("background-color: red; color: white; font-weight: bold; padding: 8px;")
+        self.boton_volver.clicked.connect(self.volver_a_home)
+
+        # **Organizar los botones en un layout horizontal**
+        botones_layout = QHBoxLayout()
+        botones_layout.addWidget(self.boton_volver)
+        botones_layout.addWidget(self.boton_continuar)
+
+        # **Agregar widgets al layout principal**
         layout.addWidget(self.label_validador)
         layout.addWidget(self.combo_validador)
         layout.addWidget(self.label_conductor)
@@ -57,7 +80,7 @@ class LoginScreen(QWidget):
         layout.addWidget(self.combo_vehiculo)
         layout.addWidget(self.label_patente)
         layout.addWidget(self.combo_patente)
-        layout.addWidget(self.boton_continuar)
+        layout.addLayout(botones_layout)  # Agregar los botones alineados al final
 
         self.setLayout(layout)
 
@@ -138,3 +161,7 @@ class LoginScreen(QWidget):
 
         QMessageBox.information(self, "Datos guardados", "Los datos han sido guardados correctamente.")
         self.main_app.cambiar_a_pantalla_validacion()
+
+    def volver_a_home(self):
+        """Regresa a la pantalla de Home."""
+        self.main_app.regresar_a_home()
