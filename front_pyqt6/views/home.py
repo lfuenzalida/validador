@@ -49,3 +49,5 @@ class HomeScreen(QWidget):
         """Preparado para futura implementación del módulo de Retiro."""
         print("Función de retiro aún no implementada")
 
+    
+

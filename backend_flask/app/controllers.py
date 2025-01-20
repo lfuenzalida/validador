@@ -100,7 +100,7 @@ def obtener_detalle_factura(nro_documento):
         return {"error": str(e)}, 500
 
 
-HISTORIAL_PATH = r"\\DESKTOP-KB0S585\validaciones\validaciones.xlsx" 
+HISTORIAL_PATH = r"\\192.168.1.58\validaciones\validaciones.xlsx" 
 
 def inicializar_excel():
     """

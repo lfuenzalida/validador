@@ -1,8 +1,8 @@
 import sys
 from PyQt6.QtWidgets import QApplication, QStackedWidget
 from views.home import HomeScreen
-from views.login import LoginScreen
-from views.validation import ValidationScreen
+from views.delivery import LoginScreen
+from views.deliveryValidation import ValidationScreen
 
 
 class MainApp(QStackedWidget):
@@ -31,6 +31,7 @@ class MainApp(QStackedWidget):
     def cambiar_a_login(self):
         """Cambia de Home a Login."""
         self.setCurrentWidget(self.login_screen)
+        self.setGeometry(100, 100, 500, 300) 
 
     def cambiar_a_pantalla_validacion(self):
         """Cambia de Login a Validación y expande a pantalla completa."""

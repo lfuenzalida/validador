@@ -29,3 +29,11 @@ def validar_factura():
 
     resultado = registrar_validacion(nombre_validador, nro_factura, etiquetas_incorrectas, conductor, peoneta, vehiculo, patente)
     return jsonify(resultado), 200
+
+
+@factura_bp.route('/test', methods=['GET'])
+def test_endpoint():
+    """
+    Endpoint de prueba para verificar que el backend está corriendo correctamente.
+    """
+    return jsonify({"message": "El backend está funcionando correctamente."}), 200

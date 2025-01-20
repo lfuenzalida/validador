@@ -362,6 +362,6 @@ class ValidationScreen(QWidget):
         self.registro_validaciones.setRowCount(0)
 
         # Volver a la pantalla de inicio de sesión
-        self.main_app.regresar_a_login()
+        self.main_app.cambiar_a_login()
 
     
