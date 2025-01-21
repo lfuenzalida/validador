@@ -43,11 +43,12 @@ class HomeScreen(QWidget):
 
     def ir_a_login(self):
         """Navega al Login para iniciar el proceso de validación."""
-        self.main_app.cambiar_a_login()
+        self.main_app.cambiar_a_delivery()
+
 
     def ir_a_retiro(self):
-        """Preparado para futura implementación del módulo de Retiro."""
-        print("Función de retiro aún no implementada")
+        """Navega a la pantalla de Retiro."""
+        self.main_app.cambiar_a_withdrawal()
 
     
 

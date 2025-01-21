@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton
 from PyQt6.QtCore import Qt
 
 
-class LoginScreen(QWidget):
+class DeliveryScreen(QWidget):
     def __init__(self, main_app):
         super().__init__()
         self.main_app = main_app

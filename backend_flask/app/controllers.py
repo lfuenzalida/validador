@@ -16,7 +16,8 @@ def obtener_factura(nro_documento):
             c.razon_social AS cliente,
             e.razon_social AS facturador,
             ef.total,  
-            SUM(df.kilo_neto) AS kilo_neto_total
+            SUM(df.kilo_neto) AS kilo_neto_total,
+            SUM(df.caja) AS  cat_cajas
         FROM enc_factura ef
         JOIN det_factura df 
             ON ef.nro_documento = df.nro_documento 
@@ -44,7 +45,8 @@ def obtener_factura(nro_documento):
                 "cliente": row[1],
                 "facturador": row[2],
                 "total": float(row[3]),
-                "total kilos": float(row[4])
+                "total kilos": float(row[4]),
+                "total Cajas": int (row[5])
             }, 200
         else:
             return {"error": "Factura no encontrada"}, 404

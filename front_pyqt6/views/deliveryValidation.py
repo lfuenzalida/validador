@@ -10,7 +10,7 @@ import re
 import keyboard
 
 
-class ValidationScreen(QWidget):
+class DeliveryValidationScreen(QWidget):
     def __init__(self, main_app):
         super().__init__()
         self.main_app = main_app
@@ -51,6 +51,7 @@ class ValidationScreen(QWidget):
         self.info_cliente = QLabel("Cliente: ")
         self.info_facturador = QLabel("Facturador: ")
         self.info_kilos = QLabel("Total Kilos: ")
+        
 
         for label in [
             self.info_validador, self.info_conductor, self.info_peoneta, self.info_vehiculo, self.info_patente,
@@ -126,6 +127,13 @@ class ValidationScreen(QWidget):
         if self.factura_ya_validada(nro_factura):
             QMessageBox.warning(self, "Advertencia", f"La factura {nro_factura} ya ha sido validada.")
             return
+        
+        # # Limpieza explícita antes de buscar la nueva factura
+        # self.info_cliente.setText("Cliente: ")
+        # self.info_facturador.setText("Facturador: ")
+        # self.info_kilos.setText("Total Kilos: ")
+        # self.tabla_etiquetas.setRowCount(0)
+
 
         url = f"http://127.0.0.1:8000/api/factura/{nro_factura}"
         response = requests.get(url)
@@ -135,6 +143,7 @@ class ValidationScreen(QWidget):
             self.info_cliente.setText(f"Cliente: {data['cliente']}")
             self.info_facturador.setText(f"Facturador: {data['facturador']}")
             self.info_kilos.setText(f"Total Kilos: {data['total kilos']}")
+            
 
             detalles_url = f"http://127.0.0.1:8000/api/factura/{nro_factura}/detalles"
             detalles_response = requests.get(detalles_url)
@@ -204,11 +213,24 @@ class ValidationScreen(QWidget):
     def llenar_tabla(self, detalles):
         """ Llena la tabla de etiquetas con datos. """
         self.tabla_etiquetas.setRowCount(len(detalles))
+    
         for row, item in enumerate(detalles):
-            self.tabla_etiquetas.setItem(row, 0, QTableWidgetItem(str(item['nro_etiqueta'])))
-            self.tabla_etiquetas.setItem(row, 1, QTableWidgetItem(item['corte']))
-            self.tabla_etiquetas.setItem(row, 2, QTableWidgetItem(item['marca']))
-            self.tabla_etiquetas.setItem(row, 3, QTableWidgetItem(str(item['kilos'])))
+            # Crear elementos no editables para las columnas de datos
+            nro_etiqueta_item = QTableWidgetItem(str(item['nro_etiqueta']))
+            nro_etiqueta_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)  # Solo seleccionable
+            self.tabla_etiquetas.setItem(row, 0, nro_etiqueta_item)
+
+            corte_item = QTableWidgetItem(item['corte'])
+            corte_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)  # Solo seleccionable
+            self.tabla_etiquetas.setItem(row, 1, corte_item)
+
+            marca_item = QTableWidgetItem(item['marca'])
+            marca_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)  # Solo seleccionable
+            self.tabla_etiquetas.setItem(row, 2, marca_item)
+
+            kilos_item = QTableWidgetItem(str(item['kilos']))
+            kilos_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)  # Solo seleccionable
+            self.tabla_etiquetas.setItem(row, 3, kilos_item)
 
             # Crear checkbox para validar
             checkbox = QCheckBox()
@@ -269,6 +291,9 @@ class ValidationScreen(QWidget):
         self.registro_validaciones.setItem(row_count, 3, QTableWidgetItem(estado))  # Estado de la validación
         self.registro_validaciones.setItem(row_count, 4, QTableWidgetItem(detalle))  # Detalles
 
+        # Limpiar los datos de cliente
+        self.limpiar_datos_cliente()
+
         # Limpiar la tabla de detalles de la factura después de registrar la validación
         self.tabla_etiquetas.setRowCount(0)
         self.factura_input.clear()
@@ -301,6 +326,20 @@ class ValidationScreen(QWidget):
         """ Cambia a la pantalla de inicio de sesión después de finalizar la validación. """
         self.validation_screen.hide()
         self.login.show()
+
+    def limpiar_datos_cliente(self):
+        """Limpia los datos del cliente en la interfaz."""
+        self.info_cliente.setText("Cliente: ")
+        self.info_facturador.setText("Facturador: ")
+        self.info_kilos.setText("Total Kilos: ")
+        self.tabla_etiquetas.setRowCount(0)
+
+        # Forzar refresco de la interfaz
+        self.info_cliente.update()
+        self.info_facturador.update()
+        self.info_kilos.update()
+        self.factura_input.update()
+        self.tabla_etiquetas.update()
 
 
     def finalizar_validacion(self):
