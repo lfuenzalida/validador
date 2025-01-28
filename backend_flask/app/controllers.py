@@ -1,4 +1,4 @@
-from app.database import get_db_connection
+from app.database import get_db_gexus_connection, get_db_reg_connection
 import psycopg2
 import pandas as pd
 import os 
@@ -14,10 +14,11 @@ def obtener_factura(nro_documento):
         SELECT 
             ef.nro_documento AS factura,
             c.razon_social AS cliente,
+            c.rut_cliente AS rut,
             e.razon_social AS facturador,
             ef.total,  
             SUM(df.kilo_neto) AS kilo_neto_total,
-            SUM(df.caja) AS  cat_cajas
+            SUM(df.caja) AS cat_cajas
         FROM enc_factura ef
         JOIN det_factura df 
             ON ef.nro_documento = df.nro_documento 
@@ -26,10 +27,10 @@ def obtener_factura(nro_documento):
         JOIN empresa e 
             ON e.rut_empresa = ef.rut_empresa 
         WHERE ef.nro_documento = %s
-        GROUP BY ef.nro_documento, c.razon_social, e.razon_social, ef.total;
+        GROUP BY ef.nro_documento, c.razon_social, c.rut_cliente, e.razon_social, ef.total;
     """
     try:
-        conn = get_db_connection()
+        conn = get_db_gexus_connection()
         if not conn:
             return {"error": "No se pudo conectar a la base de datos"}, 500
 
@@ -43,10 +44,11 @@ def obtener_factura(nro_documento):
             return {
                 "factura": row[0],
                 "cliente": row[1],
-                "facturador": row[2],
-                "total": float(row[3]),
-                "total kilos": float(row[4]),
-                "total Cajas": int (row[5])
+                "rut": row[2],
+                "facturador": row[3],
+                "total": float(row[4]),
+                "total kilos": float(row[5]),
+                "total Cajas": int (row[6])
             }, 200
         else:
             return {"error": "Factura no encontrada"}, 404
@@ -73,7 +75,7 @@ def obtener_detalle_factura(nro_documento):
         ORDER BY e.descripcion ASC, c.descripcion ASC;
     """
     try:
-        conn = get_db_connection()
+        conn = get_db_gexus_connection()
         if not conn:
             return {"error": "No se pudo conectar a la base de datos"}, 500
 
@@ -100,60 +102,141 @@ def obtener_detalle_factura(nro_documento):
 
     except Exception as e:
         return {"error": str(e)}, 500
+    
+def calcular_digito_verificador(rut):
+    """
+    Calcula el dígito verificador de un RUT chileno.
+    :param rut: Número de RUT (sin dígito verificador).
+    :return: Dígito verificador como string ('0'-'9' o 'K').
+    """
+    suma = 0
+    multiplicador = 2
+    for digito in reversed(str(rut)):
+        suma += int(digito) * multiplicador
+        multiplicador = 9 if multiplicador == 7 else multiplicador + 1
+    resto = 11 - (suma % 11)
+    if resto == 11:
+        return '0'
+    if resto == 10:
+        return 'K'
+    return str(resto)
 
 
-HISTORIAL_PATH = r"\\192.168.1.58\validaciones\validaciones.xlsx" 
+def registrar_flujo(tipo_flujo, registros):
+    """Procesa y registra los datos según el tipo de flujo (despacho o retiro)."""
+    
+    print(f"\n➡️ Recibiendo datos para {tipo_flujo}:")
+    for reg in registros:
+        print(reg)  # Muestra en consola los registros recibidos
 
-def inicializar_excel():
-    """
-    Inicializa el archivo Excel para guardar el historial de validaciones, 
-    si no existe.
-    """
-    if not os.path.exists(HISTORIAL_PATH):
-        columnas = [
-            "Fecha", "Nombre Validador", "Número de Factura", "Resultado", "Detalle",
-            "Conductor", "Peoneta", "Vehículo", "Patente"
-        ]
-        df = pd.DataFrame(columns=columnas)
-        df.to_excel(HISTORIAL_PATH, index=False)
-        print(f"✅ Archivo inicializado en {HISTORIAL_PATH}")
-    else:
-        print(f"✅ Archivo existente detectado en {HISTORIAL_PATH}")
+    if tipo_flujo not in ['despacho', 'retiro']:
+        print("❌ Error: Tipo de flujo no válido")
+        return jsonify({"error": "Tipo de flujo no válido. Use 'despacho' o 'retiro'."}), 400
 
-def registrar_validacion(nombre_validador, nro_factura, etiquetas_incorrectas, conductor, peoneta, vehiculo, patente):
-    """
-    Registra la validación en el archivo Excel con todos los nuevos campos.
-    """
+    connection = get_db_reg_connection()
+    if connection is None:
+        print("❌ Error: No se pudo conectar a la base de datos")
+        return jsonify({"error": "No se pudo conectar a la base de datos."}), 500
+
+    print("✅ Conexión a la base de datos establecida correctamente.")
+
     try:
-        if not os.path.exists(HISTORIAL_PATH):
-            inicializar_excel()
-        
-        # Formato de fecha DD-MM-AAAA
-        formated_date = date.today().strftime("%d-%m-%Y")
+        with connection.cursor() as cursor:
+            for registro in registros:
+                rut_cliente = registro['cliente_rut']
+                digito_verificador = calcular_digito_verificador(rut_cliente)  # Calcula el dígito verificador
+                
+                print(f"🔎 Verificando cliente con RUT: {rut_cliente}-{digito_verificador}")
 
-        df = pd.read_excel(HISTORIAL_PATH)
+                # Validar existencia del cliente
+                cursor.execute(
+                    "SELECT COUNT(*) FROM clientes WHERE rut_cliente = %s AND dig_verificador = %s",
+                    (rut_cliente, digito_verificador)
+                )
+                cliente_existe = cursor.fetchone()[0]
 
-        # **Corregir la conversión de la lista a cadena**
-        etiquetas_faltantes_str = ", ".join(etiquetas_incorrectas) if etiquetas_incorrectas else "Todo correcto"
+                # Si no existe, registrar el cliente automáticamente
+                if cliente_existe == 0:
+                    sql_insert_cliente = """
+                    INSERT INTO clientes (rut_cliente, dig_verificador, razon_social)
+                    VALUES (%s, %s, %s);
+                    """
+                    print(f"🆕 Registrando nuevo cliente: {rut_cliente} - {registro['cliente_nombre']}")
+                    cursor.execute(sql_insert_cliente, (rut_cliente, digito_verificador, registro['cliente_nombre']))
 
-        nuevo_registro = {
-            "Fecha": formated_date,
-            "Nombre Validador": nombre_validador,
-            "Número de Factura": nro_factura,
-            "Resultado": "Completado" if not etiquetas_incorrectas else "Incompleto",
-            "Detalle": etiquetas_faltantes_str,  # **Ahora se guarda como un string correctamente**
-            "Conductor": conductor,
-            "Peoneta": peoneta,
-            "Vehículo": vehiculo,
-            "Patente": patente
-        }
+                if tipo_flujo == 'despacho':
+                    sql_despacho = """
+                    INSERT INTO despacho (nro_factura, cliente_rut, cliente_nombre, nombre_validador, conductor, peoneta, vehiculo, patente, estado, fecha_validacion)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW());
+                    """
+                    print(f"📦 Insertando despacho: {registro}")
+                    cursor.execute(sql_despacho, (
+                        registro['nro_factura'], rut_cliente, registro['cliente_nombre'], registro['nombre_validador'],
+                        registro['conductor'], registro['peoneta'], registro['vehiculo'], registro['patente'],
+                        registro['estado']
+                    ))
+                    id_despacho = cursor.lastrowid  # Capturar el ID de despacho registrado
+                    print(f"✅ Despacho registrado con ID: {id_despacho}")
 
-        # Crear un nuevo DataFrame con el registro y concatenarlo al existente
-        nuevo_df = pd.DataFrame([nuevo_registro])
-        df = pd.concat([df, nuevo_df], ignore_index=True)
-        df.to_excel(HISTORIAL_PATH, index=False)
+                    # Insertar detalles en `detalle_salida`
+                    for etiqueta in registro.get('etiquetas_validadas', []):
+                        sql_detalle_validadas = """
+                        INSERT INTO detalle_salida (id_despacho, id_retiro, tipo_salida, nro_etiqueta, tipo_etiqueta)
+                        VALUES (%s, NULL, 'despacho', %s, 'validada');
+                        """
+                        print(f"✅ Insertando etiqueta validada en despacho: {etiqueta}")
+                        cursor.execute(sql_detalle_validadas, (id_despacho, etiqueta))
 
-        return {"message": "Validación registrada con éxito"}
+                    for etiqueta in registro.get('etiquetas_no_encontradas', []):
+                        sql_detalle_no_encontradas = """
+                        INSERT INTO detalle_salida (id_despacho, id_retiro, tipo_salida, nro_etiqueta, tipo_etiqueta)
+                        VALUES (%s, NULL, 'despacho', %s, 'no_encontrada');
+                        """
+                        print(f"⚠️ Insertando etiqueta NO encontrada en despacho: {etiqueta}")
+                        cursor.execute(sql_detalle_no_encontradas, (id_despacho, etiqueta))
+
+                elif tipo_flujo == 'retiro':
+                    sql_retiro = """
+                    INSERT INTO retiro (nro_factura, cliente_rut, cliente_nombre, nombre_validador, quien_retira, refrigerado, patente, estado, fecha_validacion)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW());
+                    """
+                    print(f"📦 Insertando retiro: {registro}")
+                    cursor.execute(sql_retiro, (
+                        registro['nro_factura'], rut_cliente, registro['cliente_nombre'], registro['nombre_validador'],
+                        registro['quien_retira'], registro['refrigerado'], registro['patente'], registro['estado']
+                    ))
+                    id_retiro = cursor.lastrowid  # Capturar el ID de retiro registrado
+                    print(f"✅ Retiro registrado con ID: {id_retiro}")
+
+                    # Insertar detalles en `detalle_salida`
+                    for etiqueta in registro.get('etiquetas_validadas', []):
+                        sql_detalle_validadas = """
+                        INSERT INTO detalle_salida (id_despacho, id_retiro, tipo_salida, nro_etiqueta, tipo_etiqueta)
+                        VALUES (NULL, %s, 'retiro', %s, 'validada');
+                        """
+                        print(f"✅ Insertando etiqueta validada en retiro: {etiqueta}")
+                        cursor.execute(sql_detalle_validadas, (id_retiro, etiqueta))
+
+                    for etiqueta in registro.get('etiquetas_no_encontradas', []):
+                        sql_detalle_no_encontradas = """
+                        INSERT INTO detalle_salida (id_despacho, id_retiro, tipo_salida, nro_etiqueta, tipo_etiqueta)
+                        VALUES (NULL, %s, 'retiro', %s, 'no_encontrada');
+                        """
+                        print(f"⚠️ Insertando etiqueta NO encontrada en retiro: {etiqueta}")
+                        cursor.execute(sql_detalle_no_encontradas, (id_retiro, etiqueta))
+
+        print("🔄 Confirmando cambios en la base de datos...")
+        connection.commit()
+        print("✅ Cambios guardados correctamente.")
+
+        return jsonify({"message": "Registros procesados y almacenados correctamente."}), 201
+
     except Exception as e:
-        print(f"❌ Error al registrar validación: {e}")
-        return {"error": str(e)}
+        connection.rollback()
+        print(f"❌ Error al registrar datos: {e}")
+        return jsonify({"error": f"Error al registrar los datos: {e}"}), 500
+
+    finally:
+        connection.close()
+        print("🔌 Conexión cerrada con la base de datos.")
+

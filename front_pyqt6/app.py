@@ -1,58 +1,71 @@
 import sys
-from PyQt6.QtWidgets import QApplication, QStackedWidget
+from PyQt6.QtWidgets import QApplication, QStackedWidget, QMainWindow
 from views.home import HomeScreen
 from views.delivery import DeliveryScreen
-from views.deliveryValidation import DeliveryValidationScreen
 from views.withdrawal import WithdrawalScreen
+from views.deliveryValidation import DeliveryValidationScreen
 
 
-class MainApp(QStackedWidget):
-    def __init__(self):
+class MainApp(QMainWindow):
+    def __init__(self, flujo="despacho", datos_generales=None):
         super().__init__()
         self.setWindowTitle("Validador de Facturas")
+        self.setGeometry(100, 100, 500, 300)
 
-        # ** Tamaño inicial de la ventana **
-        self.setGeometry(100, 100, 500, 300)  # Tamaño inicial para Home
+        if datos_generales is None:
+            datos_generales = {
+                "validador": "No definido",
+                "conductor": "",
+                "peoneta": "",
+                "vehiculo": "",
+                "patente": "",
+                "quien_retira": "",
+                "refrigerado": False
+            }
 
-        # Inicializar variables de validación
-        self.datos_validacion = {}
+        self.stacked_widget = QStackedWidget()
+        self.setCentralWidget(self.stacked_widget)
 
-        # Inicializar pantallas
+        # Configura las pantallas
         self.home_screen = HomeScreen(self)
         self.delivery_screen = DeliveryScreen(self)
         self.withdrawal_screen = WithdrawalScreen(self)
-        self.delivery_validation_screen = DeliveryValidationScreen(self)
+        self.delivery_validation_screen = DeliveryValidationScreen(self, flujo, datos_generales)
 
-        # Agregar pantallas al stack
-        self.addWidget(self.home_screen)  # Primera pantalla
-        self.addWidget(self.delivery_screen)
-        self.addWidget(self.withdrawal_screen)
-        self.addWidget(self.delivery_validation_screen)
-        
+        self.stacked_widget.addWidget(self.home_screen)
+        self.stacked_widget.addWidget(self.delivery_screen)
+        self.stacked_widget.addWidget(self.withdrawal_screen)
+        self.stacked_widget.addWidget(self.delivery_validation_screen)
 
-        self.setCurrentWidget(self.home_screen)  # Mostrar Home al inicio
+        self.stacked_widget.setCurrentWidget(self.home_screen)
+
 
     def cambiar_a_delivery(self):
         """Cambia de Home a despacho."""
-        self.setCurrentWidget(self.delivery_screen)
-        self.setGeometry(100, 100, 500, 300) 
+        self.stacked_widget.setCurrentWidget(self.delivery_screen)
+        self.setGeometry(100, 100, 500, 300)
 
     def cambiar_a_withdrawal(self):
         """Cambia de Home a retiro."""
-        self.setCurrentWidget(self.withdrawal_screen)
-        self.setGeometry(100, 100, 500, 300) 
+        self.stacked_widget.setCurrentWidget(self.withdrawal_screen)
+        self.setGeometry(100, 100, 500, 300)
 
-    def cambiar_a_pantalla_validacion(self):
-        """Cambia de Login a Validación y expande a pantalla completa."""
-        self.setCurrentWidget(self.delivery_validation_screen)
-        self.showMaximized()  # Expande la pantalla a full
-        self.delivery_validation_screen.cargar_datos_validacion(self.datos_validacion)
+    def cambiar_a_pantalla_validacion(self, flujo, datos_generales):
+        self.delivery_validation_screen = DeliveryValidationScreen(self, flujo, datos_generales)
 
+        # Registra la pantalla en el stack si no está ya añadida
+        if self.stacked_widget.indexOf(self.delivery_validation_screen) == -1:
+            self.stacked_widget.addWidget(self.delivery_validation_screen)
+
+        # Cambia a la pantalla de validación
+        self.stacked_widget.setCurrentWidget(self.delivery_validation_screen)
+
+    
     def regresar_a_home(self):
         """Regresa a la pantalla de Home."""
-        self.setCurrentWidget(self.home_screen)
+        self.stacked_widget.setCurrentWidget(self.home_screen)
         self.showNormal()
-        self.setGeometry(100, 100, 500, 300)  # Restaura tamaño pequeño
+        self.setGeometry(100, 100, 500, 300)
 
 
 if __name__ == "__main__":

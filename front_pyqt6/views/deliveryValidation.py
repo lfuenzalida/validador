@@ -9,19 +9,29 @@ from datetime import date
 import re
 import keyboard
 
-
 class DeliveryValidationScreen(QWidget):
-    def __init__(self, main_app):
+    def __init__(self, main_app, flujo, datos_generales):
         super().__init__()
+        self.etiquetas_por_factura = {}
         self.main_app = main_app
+        self.flujo = flujo
+        self.datos_generales = datos_generales or {
+            "validador": "No definido",
+            "conductor": "",
+            "peoneta": "",
+            "vehiculo": "",
+            "patente": "",
+            "quien_retira": "",
+            "refrigerado": False
+        }
         self.setWindowTitle("Validación de Facturas")
         self.setGeometry(100, 100, 900, 1200)
         self.initUI()
         keyboard.on_press_key("tab", lambda _: self.procesar_codigo_barras())
-        
+        self.cargar_datos_flujo()  # Cargar los datos del flujo
 
     def initUI(self):
-        main_layout = QHBoxLayout()  # Cambio a diseño horizontal para dividir en dos partes
+        main_layout = QHBoxLayout()
 
         # **Lado izquierdo: Información y validación de facturas**
         left_layout = QVBoxLayout()
@@ -31,31 +41,43 @@ class DeliveryValidationScreen(QWidget):
         self.factura_input = QLineEdit()
         self.buscar_button = QPushButton("Buscar")
         self.buscar_button.clicked.connect(self.buscar_factura)
-        
-
 
         factura_layout = QHBoxLayout()
         factura_layout.addWidget(self.factura_label)
         factura_layout.addWidget(self.factura_input)
         factura_layout.addWidget(self.buscar_button)
-
         left_layout.addLayout(factura_layout)
 
-        # **Información del validador y datos de la factura**
+        # **Título dinámico del flujo**
+        self.titulo_flujo = QLabel("")
+        self.titulo_flujo.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.titulo_flujo.setStyleSheet("font-size: 18px; font-weight: bold;")
+        left_layout.addWidget(self.titulo_flujo)
+
+        # **Información dinámica del flujo**
         self.info_validador = QLabel("Validador: ")
         self.info_conductor = QLabel("Conductor: ")
         self.info_peoneta = QLabel("Peoneta: ")
         self.info_vehiculo = QLabel("Vehículo: ")
         self.info_patente = QLabel("Patente: ")
+        self.info_quien_retira = QLabel("Quien Retira: ")
+        self.info_refrigerado = QLabel("Vehículo Refrigerado: ")
 
         self.info_cliente = QLabel("Cliente: ")
+        self.info_rut = QLabel("Rut: ")
         self.info_facturador = QLabel("Facturador: ")
         self.info_kilos = QLabel("Total Kilos: ")
-        
+        self.total_cajas = QLabel("Total cajas:")
 
-        for label in [
-            self.info_validador, self.info_conductor, self.info_peoneta, self.info_vehiculo, self.info_patente,
-            self.info_cliente, self.info_facturador, self.info_kilos
+        self.labels_despacho = [
+            self.info_validador, self.info_conductor, self.info_peoneta, self.info_vehiculo, self.info_patente
+        ]
+        self.labels_retiro = [
+            self.info_validador, self.info_quien_retira, self.info_patente, self.info_refrigerado
+        ]
+
+        for label in self.labels_despacho + self.labels_retiro + [
+            self.info_cliente ,self.info_rut, self.info_facturador, self.info_kilos, self.total_cajas
         ]:
             left_layout.addWidget(label)
 
@@ -72,10 +94,14 @@ class DeliveryValidationScreen(QWidget):
         # **Barra de entrada para la pistola**
         self.barra_entrada_pistola = QLineEdit(self)
         self.barra_entrada_pistola.setPlaceholderText("Escanea un código de barras aquí...")
-        self.barra_entrada_pistola.setMaxLength(50)  # Limitar caracteres por seguridad
+        self.barra_entrada_pistola.setMaxLength(50)
         self.barra_entrada_pistola.returnPressed.connect(self.procesar_codigo_barras)
         left_layout.addWidget(self.barra_entrada_pistola)
 
+        # **Botón de Volver**
+        self.volver_button = QPushButton("Volver")
+        self.volver_button.clicked.connect(self.volver_a_flujo)
+        left_layout.addWidget(self.volver_button)
 
         # **Botón de validación**
         self.validar_button = QPushButton("Factura Validada")
@@ -87,7 +113,6 @@ class DeliveryValidationScreen(QWidget):
 
         left_layout.addWidget(self.validar_button)
         left_layout.addWidget(self.finalizar_button)
-
         main_layout.addLayout(left_layout)
 
         # **Lado derecho: Registro de validaciones**
@@ -97,26 +122,59 @@ class DeliveryValidationScreen(QWidget):
         self.registro_label = QLabel("<b><font size=4>Facturas Validadas</font></b>")
         right_layout.addWidget(self.registro_label)
 
+        
+
         self.registro_validaciones = QTableWidget()
         self.registro_validaciones.setColumnCount(5)
         self.registro_validaciones.setHorizontalHeaderLabels(["✓", "N° Factura", "Cliente", "Estado", "Detalle"])
         right_layout.addWidget(self.registro_validaciones)
 
         self.eliminar_button = QPushButton("Eliminar Facturas Seleccionadas")
-        self.eliminar_button.setVisible(False)  # Inicialmente oculto
+        self.eliminar_button.setVisible(False)
         self.eliminar_button.clicked.connect(self.eliminar_facturas)
         right_layout.addWidget(self.eliminar_button)
 
         main_layout.addLayout(right_layout)
         self.setLayout(main_layout)
 
-    def cargar_datos_validacion(self, datos):
-        """Carga los datos del validador al cambiar de pantalla."""
-        self.info_validador.setText(f"Validador: {datos['validador']}")
-        self.info_conductor.setText(f"Conductor: {datos['conductor']}")
-        self.info_peoneta.setText(f"Peoneta: {datos['peoneta']}")
-        self.info_vehiculo.setText(f"Vehículo: {datos['vehiculo']}")
-        self.info_patente.setText(f"Patente: {datos['patente']}")
+
+    def volver_a_flujo(self):
+        """Regresa a la pantalla del flujo correspondiente (despacho o retiro)."""
+        if self.flujo == "despacho":
+            self.main_app.cambiar_a_delivery()
+        elif self.flujo == "retiro":
+            self.main_app.cambiar_a_withdrawal()
+        else:
+            QMessageBox.warning(self, "Error", f"Flujo desconocido: {self.flujo}.")
+
+    def cargar_datos_flujo(self):
+        """Cargar los datos del flujo en la interfaz."""
+        if self.flujo == "despacho":
+            self.titulo_flujo.setText("Flujo: Despacho")
+            self.info_validador.setText(f"Validador: {self.datos_generales.get('validador', 'No definido')}")
+            self.info_conductor.setText(f"Conductor: {self.datos_generales.get('conductor', 'No definido')}")
+            self.info_peoneta.setText(f"Peoneta: {self.datos_generales.get('peoneta', 'No definido')}")
+            self.info_vehiculo.setText(f"Vehículo: {self.datos_generales.get('vehiculo', 'No definido')}")
+            self.info_patente.setText(f"Patente: {self.datos_generales.get('patente', 'No definido')}")
+
+            # Ocultar campos específicos de retiro
+            self.info_quien_retira.hide()
+            self.info_refrigerado.hide()
+        elif self.flujo == "retiro":
+            self.titulo_flujo.setText("Flujo: Retiro")
+            self.info_validador.setText(f"Validador: {self.datos_generales.get('validador', 'No definido')}")
+            self.info_quien_retira.setText(f"Quien Retira: {self.datos_generales.get('quien_retira', 'No definido')}")
+            self.info_patente.setText(f"Patente: {self.datos_generales.get('patente', 'No definido')}")
+            refrigerado = "Sí" if self.datos_generales.get('refrigerado', False) else "No"
+            self.info_refrigerado.setText(f"Vehículo Refrigerado: {refrigerado}")
+
+            # Ocultar campos específicos de despacho
+            self.info_conductor.hide()
+            self.info_peoneta.hide()
+            self.info_vehiculo.hide()
+        else:
+            QMessageBox.warning(self, "Error", f"Flujo desconocido: {self.flujo}.")
+
 
     def buscar_factura(self):
         nro_factura = self.factura_input.text().strip()
@@ -127,25 +185,21 @@ class DeliveryValidationScreen(QWidget):
         if self.factura_ya_validada(nro_factura):
             QMessageBox.warning(self, "Advertencia", f"La factura {nro_factura} ya ha sido validada.")
             return
-        
-        # # Limpieza explícita antes de buscar la nueva factura
-        # self.info_cliente.setText("Cliente: ")
-        # self.info_facturador.setText("Facturador: ")
-        # self.info_kilos.setText("Total Kilos: ")
-        # self.tabla_etiquetas.setRowCount(0)
 
 
-        url = f"http://127.0.0.1:8000/api/factura/{nro_factura}"
+        url = f"http://127.0.0.1:5000/api/factura/{nro_factura}"
         response = requests.get(url)
 
         if response.status_code == 200:
             data = response.json()
             self.info_cliente.setText(f"Cliente: {data['cliente']}")
+            self.info_rut.setText(f"Rut: {data['rut']}")
             self.info_facturador.setText(f"Facturador: {data['facturador']}")
             self.info_kilos.setText(f"Total Kilos: {data['total kilos']}")
+            self.total_cajas.setText(f"Total cajas: {data['total Cajas']}")
             
 
-            detalles_url = f"http://127.0.0.1:8000/api/factura/{nro_factura}/detalles"
+            detalles_url = f"http://127.0.0.1:5000/api/factura/{nro_factura}/detalles"
             detalles_response = requests.get(detalles_url)
             if detalles_response.status_code == 200:
                 detalles = detalles_response.json()
@@ -251,6 +305,13 @@ class DeliveryValidationScreen(QWidget):
                 QMessageBox.warning(self, "Advertencia", f"La factura {nro_factura} ya ha sido validada.")
                 return  # Evitar duplicados
 
+
+        # ✅ Guardamos etiquetas en `self.etiquetas_por_factura`
+        self.etiquetas_por_factura[nro_factura] = {
+            "validadas": self.obtener_etiquetas_validadas(),
+            "no_encontradas": self.obtener_etiquetas_no_encontradas()
+        }
+
         etiquetas_faltantes = [
             self.tabla_etiquetas.item(row, 0).text()
             for row in range(self.tabla_etiquetas.rowCount())
@@ -275,7 +336,26 @@ class DeliveryValidationScreen(QWidget):
             estado = "Validada"
             detalle = "OK"
 
-        cliente = self.info_cliente.text().replace("Cliente: ", "")
+        
+
+
+        # 🔍 Debugging para verificar almacenamiento
+        print(f"📌 Factura: {nro_factura}")
+        print(f"✅ Etiquetas Validadas Guardadas: {self.etiquetas_por_factura[nro_factura]['validadas']}")
+        print(f"⚠️ Etiquetas No Encontradas Guardadas: {self.etiquetas_por_factura[nro_factura]['no_encontradas']}")
+
+        
+
+        etiquetas_faltantes = [
+            self.tabla_etiquetas.item(row, 0).text()
+            for row in range(self.tabla_etiquetas.rowCount())
+            if not self.tabla_etiquetas.cellWidget(row, 4).isChecked()
+        ]
+
+        estado = "Validada (con detalles)" if etiquetas_faltantes else "Validada"
+        detalle = ", ".join(etiquetas_faltantes) if etiquetas_faltantes else "OK"
+
+        cliente = self.info_cliente.text().replace("Cliente: ", "").strip()  # ✅ Extraer correctamente el nombre del cliente
 
         row_count = self.registro_validaciones.rowCount()
         self.registro_validaciones.insertRow(row_count)
@@ -285,22 +365,18 @@ class DeliveryValidationScreen(QWidget):
 
         self.registro_validaciones.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
 
-        self.registro_validaciones.setCellWidget(row_count, 0, checkbox)  # Checkbox en la primera columna
-        self.registro_validaciones.setItem(row_count, 1, QTableWidgetItem(nro_factura))  # Número de factura
-        self.registro_validaciones.setItem(row_count, 2, QTableWidgetItem(cliente))  # Cliente
-        self.registro_validaciones.setItem(row_count, 3, QTableWidgetItem(estado))  # Estado de la validación
-        self.registro_validaciones.setItem(row_count, 4, QTableWidgetItem(detalle))  # Detalles
+        self.registro_validaciones.setCellWidget(row_count, 0, checkbox)
+        self.registro_validaciones.setItem(row_count, 1, QTableWidgetItem(nro_factura))
+        self.registro_validaciones.setItem(row_count, 2, QTableWidgetItem(cliente))
+        self.registro_validaciones.setItem(row_count, 3, QTableWidgetItem(estado))
+        self.registro_validaciones.setItem(row_count, 4, QTableWidgetItem(detalle))
 
-        # Limpiar los datos de cliente
-        self.limpiar_datos_cliente()
+        print(f"📌 Cliente Registrado: {cliente}")
 
-        # Limpiar la tabla de detalles de la factura después de registrar la validación
+        # Limpiar la tabla de etiquetas, pero no perder las etiquetas guardadas
         self.tabla_etiquetas.setRowCount(0)
         self.factura_input.clear()
-
-        # Mostrar botón de eliminar si hay registros
         self.eliminar_button.setVisible(True)
-
 
     def mostrar_boton_eliminar(self):
         """ Muestra el botón de eliminar si hay facturas seleccionadas """
@@ -322,10 +398,6 @@ class DeliveryValidationScreen(QWidget):
 
         self.eliminar_button.setVisible(False)  # Ocultar botón si ya no hay seleccionadas
         
-    def mostrar_pantalla_login(self):
-        """ Cambia a la pantalla de inicio de sesión después de finalizar la validación. """
-        self.validation_screen.hide()
-        self.login.show()
 
     def limpiar_datos_cliente(self):
         """Limpia los datos del cliente en la interfaz."""
@@ -336,6 +408,7 @@ class DeliveryValidationScreen(QWidget):
 
         # Forzar refresco de la interfaz
         self.info_cliente.update()
+        self.info_rut.update()
         self.info_facturador.update()
         self.info_kilos.update()
         self.factura_input.update()
@@ -343,9 +416,11 @@ class DeliveryValidationScreen(QWidget):
 
 
     def finalizar_validacion(self):
-        """ Pregunta al usuario si desea finalizar la validación y envía los datos al backend si confirma. """
+        """ Finaliza la validación enviando los registros al backend con etiquetas guardadas. """
+        if not self.datos_generales:
+            QMessageBox.warning(self, "Error", "No hay datos generales disponibles para validar.")
+            return
 
-        # Mostrar cuadro de diálogo de confirmación
         msg_box = QMessageBox()
         msg_box.setIcon(QMessageBox.Icon.Question)
         msg_box.setWindowTitle("Confirmación")
@@ -354,53 +429,88 @@ class DeliveryValidationScreen(QWidget):
         msg_box.setDefaultButton(QMessageBox.StandardButton.No)
         respuesta = msg_box.exec()
 
-        # Si el usuario elige "No", cancelar la operación
         if respuesta == QMessageBox.StandardButton.No:
             return
 
-        # Si el usuario elige "Sí", proceder con la validación
         registros = []
         for row in range(self.registro_validaciones.rowCount()):
-            nro_factura = self.registro_validaciones.item(row, 1).text() if self.registro_validaciones.item(row, 1) else ""
-            estado = self.registro_validaciones.item(row, 3).text() if self.registro_validaciones.item(row, 3) else ""
-            etiquetas_faltantes = self.registro_validaciones.item(row, 4).text().strip() if self.registro_validaciones.item(row, 4) else ""
+            nro_factura = self.registro_validaciones.item(row, 1).text() or ""
+            estado = self.registro_validaciones.item(row, 3).text() or ""
 
-            etiquetas_faltantes_lista = etiquetas_faltantes.split(", ") if etiquetas_faltantes else []
+            # ✅ Obtener etiquetas desde `self.etiquetas_por_factura`
+            etiquetas = self.etiquetas_por_factura.get(nro_factura, {"validadas": [], "no_encontradas": []})
+
+            cliente_rut = self.info_rut.text().replace("Rut: ", "").strip()
+            cliente_nombre = self.info_cliente.text().replace("Cliente: ", "").strip()
+
+            print(f"📌 Factura: {nro_factura}")
+            print(f"📌 Cliente: {cliente_nombre} - RUT: {cliente_rut}")
+            print(f"✅ Etiquetas Validadas a enviar: {etiquetas['validadas']}")
+            print(f"⚠️ Etiquetas No Encontradas a enviar: {etiquetas['no_encontradas']}")
+
             registro = {
-                "nombre_validador": self.info_validador.text().replace("Validador: ", "").strip(),
+                "nombre_validador": self.datos_generales.get("validador", "No definido"),
                 "nro_factura": nro_factura.strip(),
-                "etiquetas_incorrectas": etiquetas_faltantes_lista if estado == "Validada (con detalles)" else [],
-                "conductor": self.info_conductor.text().replace("Conductor: ", "").strip(),
-                "peoneta": self.info_peoneta.text().replace("Peoneta: ", "").strip(),
-                "vehiculo": self.info_vehiculo.text().replace("Vehículo: ", "").strip(),
-                "patente": self.info_patente.text().replace("Patente: ", "").strip()
+                "cliente_rut": cliente_rut if cliente_rut.isdigit() else "",
+                "cliente_nombre": cliente_nombre,  
+                "estado": estado,
+                "etiquetas_validadas": etiquetas["validadas"],
+                "etiquetas_no_encontradas": etiquetas["no_encontradas"]
             }
 
-            # Verificar que los datos obligatorios no sean vacíos
-            if not registro["nombre_validador"] or not registro["nro_factura"]:
-                QMessageBox.warning(self, "Error", "Faltan datos obligatorios en la validación.")
-                return
+            if self.flujo == "despacho":
+                registro.update({
+                    "conductor": self.datos_generales.get("conductor", ""),
+                    "peoneta": self.datos_generales.get("peoneta", ""),
+                    "vehiculo": self.datos_generales.get("vehiculo", ""),
+                    "patente": self.datos_generales.get("patente", ""),
+                })
+            elif self.flujo == "retiro":
+                registro.update({
+                    "quien_retira": self.datos_generales.get("quien_retira", ""),
+                    "refrigerado": self.datos_generales.get("refrigerado", ""),
+                    "patente": self.datos_generales.get("patente", ""),
+                })
 
             registros.append(registro)
 
-        # Enviar cada registro individualmente
-        url = "http://127.0.0.1:8000/api/validacion"
-        for registro in registros:
-            # print("Enviando datos al backend:", json.dumps(registro, indent=4))  # Para depuración
-            response = requests.post(url, json=registro)
+        payload = {"registros": registros}
 
-            if response.status_code != 200:
-                print("Error en la respuesta del backend:", response.text)
-                QMessageBox.warning(self, "Error", f"No se pudo enviar la validación al backend. \nError: {response.text}")
-                return  # Detener el proceso si hay un error en la primera solicitud
+        print(f"\n📤 Enviando payload al backend: {payload}")
 
-        # Confirmar envío exitoso
-        QMessageBox.information(self, "Validación", "Datos enviados al backend correctamente")
+        endpoint = "http://127.0.0.1:5000/api/despacho" if self.flujo == "despacho" else "http://127.0.0.1:5000/api/retiro"
 
-        # Limpiar la tabla de facturas validadas
+        try:
+            response = requests.post(endpoint, json=payload)
+            response.raise_for_status()
+            QMessageBox.information(self, "Validación Exitosa", "Todos los datos fueron enviados correctamente.")
+            self.main_app.regresar_a_home()
+        except requests.exceptions.RequestException as e:
+            QMessageBox.warning(self, "Error", f"Error al enviar datos al backend: {e}")
+
         self.registro_validaciones.setRowCount(0)
+        self.main_app.regresar_a_home()
 
-        # Volver a la pantalla de inicio de sesión
-        self.main_app.cambiar_a_login()
 
-    
+
+
+    def obtener_etiquetas_validadas(self):
+        """Obtiene el listado de etiquetas validadas."""
+        etiquetas_validadas = []
+        for row in range(self.tabla_etiquetas.rowCount()):
+            checkbox = self.tabla_etiquetas.cellWidget(row, 4)
+            if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+                etiqueta = self.tabla_etiquetas.item(row, 0).text()
+                etiquetas_validadas.append(etiqueta)
+        return etiquetas_validadas
+
+    def obtener_etiquetas_no_encontradas(self):
+        """Obtiene el listado de etiquetas no encontradas."""
+        etiquetas_no_encontradas = []
+        for row in range(self.tabla_etiquetas.rowCount()):
+            checkbox = self.tabla_etiquetas.cellWidget(row, 4)
+            if isinstance(checkbox, QCheckBox) and not checkbox.isChecked():
+                etiqueta = self.tabla_etiquetas.item(row, 0).text()
+                etiquetas_no_encontradas.append(etiqueta)
+        return etiquetas_no_encontradas
+        

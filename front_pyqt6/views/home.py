@@ -45,10 +45,10 @@ class HomeScreen(QWidget):
         """Navega al Login para iniciar el proceso de validación."""
         self.main_app.cambiar_a_delivery()
 
-
     def ir_a_retiro(self):
         """Navega a la pantalla de Retiro."""
         self.main_app.cambiar_a_withdrawal()
+
 
     
 

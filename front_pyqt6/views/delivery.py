@@ -139,7 +139,7 @@ class DeliveryScreen(QWidget):
         self.combo_patente.addItem(patente)
 
     def guardar_datos(self):
-        """Guarda los datos seleccionados y pasa a la siguiente pantalla."""
+        """Guarda los datos seleccionados y pasa a la pantalla de validación."""
         validador = self.combo_validador.currentText()
         conductor = self.combo_conductor.currentText()
         peoneta = self.combo_peoneta.currentText()
@@ -147,11 +147,10 @@ class DeliveryScreen(QWidget):
         patente = self.combo_patente.currentText()
 
         if not all([validador, conductor, peoneta, vehiculo, patente]):
-            QMessageBox.warning(self, "Error", "Debe seleccionar todos los campos antes de continuar.")
+            QMessageBox.warning(self, "Error", "Debe completar todos los campos antes de continuar.")
             return
 
-        # Guardar en la aplicación principal
-        self.main_app.datos_validacion = {
+        datos_generales = {
             "validador": validador,
             "conductor": conductor,
             "peoneta": peoneta,
@@ -159,8 +158,10 @@ class DeliveryScreen(QWidget):
             "patente": patente
         }
 
+        
         QMessageBox.information(self, "Datos guardados", "Los datos han sido guardados correctamente.")
-        self.main_app.cambiar_a_pantalla_validacion()
+        # Pasar los datos a la pantalla de validación
+        self.main_app.cambiar_a_pantalla_validacion("despacho", datos_generales)
 
     def volver_a_home(self):
         """Regresa a la pantalla de Home."""

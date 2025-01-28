@@ -82,7 +82,7 @@ class WithdrawalScreen(QWidget):
 
 
     def guardar_datos(self):
-        """Guarda los datos ingresados y pasa al siguiente paso."""
+        """Guarda los datos ingresados y pasa a la pantalla de validación."""
         validador = self.combo_validador.currentText()
         quien_retira = self.input_retiro.text().strip()
         patente = self.input_patente.text().strip()
@@ -92,16 +92,17 @@ class WithdrawalScreen(QWidget):
             QMessageBox.warning(self, "Error", "Debe completar todos los campos antes de continuar.")
             return
 
-        # Guardar en la aplicación principal
-        self.main_app.datos_retiro = {
+        datos_generales = {
             "validador": validador,
             "quien_retira": quien_retira,
             "patente": patente,
-            "refrigerado": refrigerado
+            "refrigerado": refrigerado,
         }
 
         QMessageBox.information(self, "Datos guardados", "Los datos han sido guardados correctamente.")
         # Aquí puedes agregar el cambio a otra pantalla o lógica adicional
+         # Pasar los datos a la pantalla de validación
+        self.main_app.cambiar_a_pantalla_validacion("retiro",datos_generales)
 
     def volver_a_home(self):
         """Regresa a la pantalla de Home."""
