@@ -11,7 +11,7 @@ def obtener_factura(nro_documento):
     Obtiene la información general de una factura con el total de kilos netos.
     """
     sql = """
-        SELECT 
+          SELECT 
             ef.nro_documento AS factura,
             c.razon_social AS cliente,
             c.rut_cliente AS rut,
@@ -19,14 +19,20 @@ def obtener_factura(nro_documento):
             ef.total,  
             SUM(df.kilo_neto) AS kilo_neto_total,
             SUM(df.caja) AS cat_cajas
-        FROM enc_factura ef
-        JOIN det_factura df 
+        FROM enc_venta ef
+        JOIN det_venta df 
             ON ef.nro_documento = df.nro_documento 
+            AND ef.nro_operacion = df.nro_operacion  -- 🔹 Solo las ventas de la última fecha
         JOIN cliente c
             ON c.rut_cliente = ef.rut_cliente 
         JOIN empresa e 
             ON e.rut_empresa = ef.rut_empresa 
         WHERE ef.nro_documento = %s
+        AND ef.fecha_documento = (
+            SELECT MAX(fecha_documento) 
+            FROM enc_venta 
+            WHERE nro_documento = %s
+        )
         GROUP BY ef.nro_documento, c.razon_social, c.rut_cliente, e.razon_social, ef.total;
     """
     try:
@@ -35,7 +41,7 @@ def obtener_factura(nro_documento):
             return {"error": "No se pudo conectar a la base de datos"}, 500
 
         with conn.cursor() as cursor:
-            cursor.execute(sql, (nro_documento,))
+            cursor.execute(sql, (nro_documento, nro_documento))
             row = cursor.fetchone()
 
         conn.close()
@@ -66,11 +72,21 @@ def obtener_detalle_factura(nro_documento):
             dve.nro_etiqueta, 
             c.descripcion AS corte, 
             e.descripcion AS marca,
-            h.kilo_neto as kilos
+            h.kilo_neto AS kilos
         FROM det_venta_etiqueta dve 
-        INNER JOIN historial_etiqueta h ON dve.nro_etiqueta = h.nro_etiqueta 
-        INNER JOIN corte c ON c.cod_corte = h.cod_corte 
-        INNER JOIN envasado e ON e.cod_envasado = h.cod_envasado 
+        INNER JOIN historial_etiqueta h 
+            ON dve.nro_etiqueta = h.nro_etiqueta 
+        INNER JOIN enc_venta ev 
+            ON dve.nro_operacion = ev.nro_operacion 
+            AND ev.nro_operacion = (
+                SELECT MAX(nro_operacion) 
+                FROM enc_venta 
+                WHERE nro_documento = dve.nro_documento
+            )
+        INNER JOIN corte c 
+            ON c.cod_corte = h.cod_corte 
+        INNER JOIN envasado e 
+            ON e.cod_envasado = h.cod_envasado 
         WHERE dve.nro_documento = %s
         ORDER BY e.descripcion ASC, c.descripcion ASC;
     """

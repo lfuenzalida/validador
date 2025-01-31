@@ -59,7 +59,8 @@ class MainApp(QMainWindow):
 
         # Cambia a la pantalla de validación
         self.stacked_widget.setCurrentWidget(self.delivery_validation_screen)
-
+        
+        self.showMaximized()
     
     def regresar_a_home(self):
         """Regresa a la pantalla de Home."""

@@ -45,7 +45,7 @@ def main():
     print("Iniciando backend...")
     backend = subprocess.Popen(backend_command, cwd=backend_dir)
 
-    if not esperar_backend("http://127.0.0.1:8000/api/test"):
+    if not esperar_backend("http://127.0.0.1:5000/api/test"):
         print("Error: El backend no se inició correctamente.")
         backend.terminate()
         sys.exit(1)

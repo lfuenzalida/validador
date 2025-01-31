@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-    QCheckBox, QHBoxLayout, QListWidget, QTextEdit, QMessageBox,
+    QCheckBox, QHBoxLayout, QListWidget, QTextEdit, QMessageBox, QGridLayout,QSpacerItem,QSizePolicy
 )
 from PyQt6.QtCore import Qt, QTimer
 import requests
@@ -13,6 +13,10 @@ class DeliveryValidationScreen(QWidget):
     def __init__(self, main_app, flujo, datos_generales):
         super().__init__()
         self.etiquetas_por_factura = {}
+        self.clientes_por_factura = {} 
+        self.total_etiquetas_validadas = 0  # Contador de etiquetas validadas
+        self.total_etiquetas_factura_actual = 0  # Contador de etiquetas de la factura actual
+        self.etiquetas_validadas_factura_actual = 0  # Contador de etiquetas validadas de la factura actual
         self.main_app = main_app
         self.flujo = flujo
         self.datos_generales = datos_generales or {
@@ -25,22 +29,27 @@ class DeliveryValidationScreen(QWidget):
             "refrigerado": False
         }
         self.setWindowTitle("Validación de Facturas")
-        self.setGeometry(100, 100, 900, 1200)
+        self.showMaximized()
         self.initUI()
+        
         keyboard.on_press_key("tab", lambda _: self.procesar_codigo_barras())
         self.cargar_datos_flujo()  # Cargar los datos del flujo
+
+    
 
     def initUI(self):
         main_layout = QHBoxLayout()
 
-        # **Lado izquierdo: Información y validación de facturas**
+
+        # **📌 Lado izquierdo: Información y validación de facturas**
         left_layout = QVBoxLayout()
 
-        # **Ingreso del número de factura**
+        # **📌 Ingreso del número de factura**
         self.factura_label = QLabel("Número de Factura:")
         self.factura_input = QLineEdit()
         self.buscar_button = QPushButton("Buscar")
         self.buscar_button.clicked.connect(self.buscar_factura)
+        self.factura_input.returnPressed.connect(self.buscar_factura)
 
         factura_layout = QHBoxLayout()
         factura_layout.addWidget(self.factura_label)
@@ -48,13 +57,13 @@ class DeliveryValidationScreen(QWidget):
         factura_layout.addWidget(self.buscar_button)
         left_layout.addLayout(factura_layout)
 
-        # **Título dinámico del flujo**
+        # **📌 Título dinámico del flujo**
         self.titulo_flujo = QLabel("")
         self.titulo_flujo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.titulo_flujo.setStyleSheet("font-size: 18px; font-weight: bold;")
         left_layout.addWidget(self.titulo_flujo)
 
-        # **Información dinámica del flujo**
+        # **📌 Información dinámica del flujo**
         self.info_validador = QLabel("Validador: ")
         self.info_conductor = QLabel("Conductor: ")
         self.info_peoneta = QLabel("Peoneta: ")
@@ -62,12 +71,11 @@ class DeliveryValidationScreen(QWidget):
         self.info_patente = QLabel("Patente: ")
         self.info_quien_retira = QLabel("Quien Retira: ")
         self.info_refrigerado = QLabel("Vehículo Refrigerado: ")
-
+        
         self.info_cliente = QLabel("Cliente: ")
         self.info_rut = QLabel("Rut: ")
         self.info_facturador = QLabel("Facturador: ")
         self.info_kilos = QLabel("Total Kilos: ")
-        self.total_cajas = QLabel("Total cajas:")
 
         self.labels_despacho = [
             self.info_validador, self.info_conductor, self.info_peoneta, self.info_vehiculo, self.info_patente
@@ -77,51 +85,112 @@ class DeliveryValidationScreen(QWidget):
         ]
 
         for label in self.labels_despacho + self.labels_retiro + [
-            self.info_cliente ,self.info_rut, self.info_facturador, self.info_kilos, self.total_cajas
+            self.info_cliente, self.info_rut, self.info_facturador, self.info_kilos
         ]:
             left_layout.addWidget(label)
 
-        # **Título "Detalle de Factura" en negrita y más grande**
+        # **📌 Título "Detalle de Factura" en negrita y más grande**
         self.detalle_label = QLabel("<b><font size=4>Detalle de Factura</font></b>")
+        self.detalle_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
         left_layout.addWidget(self.detalle_label)
 
-        # **Tabla de etiquetas**
+        # **📌 Tabla de etiquetas (más pegada al título)**
         self.tabla_etiquetas = QTableWidget()
         self.tabla_etiquetas.setColumnCount(5)
         self.tabla_etiquetas.setHorizontalHeaderLabels(["N° Etiqueta", "Corte", "Marca", "Kilos", "Validar"])
-        left_layout.addWidget(self.tabla_etiquetas)
+        self.tabla_etiquetas.setStyleSheet("margin-top: -5px;")
+        left_layout.addWidget(self.tabla_etiquetas, 1)  # 🔹 Factor 1: La tabla se expande ocupando todo el espacio disponible
 
-        # **Barra de entrada para la pistola**
-        self.barra_entrada_pistola = QLineEdit(self)
+        # **📌 Espaciador para empujar el contenedor final hacia abajo**
+        # left_layout.addItem(QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+
+        # **📌 Layout horizontal para agrupar lector de código y contador**
+        self.contador_lector_layout = QHBoxLayout()
+        self.contador_lector_layout.setContentsMargins(0, 0, 0, 0)
+
+        # **📌 Layout vertical para lector de código + botones**
+        self.lector_botones_layout = QVBoxLayout()
+
+        # **📌 Barra de entrada para la pistola**
+        self.barra_entrada_pistola = QLineEdit()
         self.barra_entrada_pistola.setPlaceholderText("Escanea un código de barras aquí...")
         self.barra_entrada_pistola.setMaxLength(50)
         self.barra_entrada_pistola.returnPressed.connect(self.procesar_codigo_barras)
-        left_layout.addWidget(self.barra_entrada_pistola)
 
-        # **Botón de Volver**
+        # **📌 Ajustar tamaño del lector**
+        self.barra_entrada_pistola.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.barra_entrada_pistola.setMinimumHeight(40)
+        self.barra_entrada_pistola.setStyleSheet("font-size: 18px; padding: 5px;")
+
+        # **📌 Contador TOTAL y C° Validadas**
+        self.contador_container = QWidget()
+        self.contador_container.setStyleSheet("background-color: black; border-radius: 8px; padding: 5px;")
+        self.contador_container.setFixedHeight(150)
+
+        self.contador_layout = QGridLayout(self.contador_container)
+
+        # **📌 Etiquetas para los valores**
+        self.total_etiquetas_label = QLabel("TOTAL")
+        self.validadas_etiquetas_label = QLabel("C° Validadas")
+
+        self.total_cajas = QLabel("0")
+        self.validadas_etiquetas_factura_label = QLabel("0")
+
+        # **📌 Aplicar estilos**
+        for label in [self.total_etiquetas_label, self.validadas_etiquetas_label]:
+            label.setStyleSheet("font-weight: bold; font-size: 16px; color: white;")
+
+        for label in [self.total_cajas, self.validadas_etiquetas_factura_label]:  
+            label.setStyleSheet("font-size: 40px; font-weight: bold; color: white; padding: 5px;")
+            label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # **📌 Agregar etiquetas al layout del contador**
+        self.contador_layout.addWidget(self.total_etiquetas_label, 0, 0)
+        self.contador_layout.addWidget(self.validadas_etiquetas_label, 0, 1)
+        self.contador_layout.addWidget(self.total_cajas, 1, 0)
+        self.contador_layout.addWidget(self.validadas_etiquetas_factura_label, 1, 1)
+
+        # **📌 Botones debajo del lector de código**
         self.volver_button = QPushButton("Volver")
         self.volver_button.clicked.connect(self.volver_a_flujo)
-        left_layout.addWidget(self.volver_button)
 
-        # **Botón de validación**
         self.validar_button = QPushButton("Factura Validada")
         self.validar_button.clicked.connect(self.factura_validada)
 
-        # **Botón de finalizar validación**
         self.finalizar_button = QPushButton("Finalizar Validación")
         self.finalizar_button.clicked.connect(self.finalizar_validacion)
 
-        left_layout.addWidget(self.validar_button)
-        left_layout.addWidget(self.finalizar_button)
+        # **📌 Agregar lector y botones al layout vertical**
+        self.lector_botones_layout.addWidget(self.barra_entrada_pistola)  
+        self.lector_botones_layout.addWidget(self.volver_button)  
+        self.lector_botones_layout.addWidget(self.validar_button)  
+        self.lector_botones_layout.addWidget(self.finalizar_button)  
+        self.lector_botones_layout.addStretch()  
+
+        # **📌 Añadir lector + botones a la izquierda y contador a la derecha**
+        self.contador_lector_layout.addLayout(self.lector_botones_layout, 2)  
+        self.contador_lector_layout.addStretch()  
+        self.contador_lector_layout.addWidget(self.contador_container, 1)  
+
+        # **📌 Agregar el nuevo layout al fondo del diseño**
+        left_layout.addLayout(self.contador_lector_layout)  
+
+        # **📌 Agregar el layout izquierdo al principal**
         main_layout.addLayout(left_layout)
+
 
         # **Lado derecho: Registro de validaciones**
         right_layout = QVBoxLayout()
+        header_layout = QHBoxLayout()
 
         # **Título "Facturas Validadas" en negrita y más grande**
         self.registro_label = QLabel("<b><font size=4>Facturas Validadas</font></b>")
+        self.contador_etiquetas_label = QLabel("N° Cajas: 0")
+        self.contador_etiquetas_label.setStyleSheet("background-color: black; border: 2px solid black; padding: 5px; font-weight: bold;""font-size: 28px;")
         right_layout.addWidget(self.registro_label)
-
+        header_layout.addStretch()
+        header_layout.addWidget(self.contador_etiquetas_label)
+        right_layout.addLayout(header_layout)
         
 
         self.registro_validaciones = QTableWidget()
@@ -136,6 +205,11 @@ class DeliveryValidationScreen(QWidget):
 
         main_layout.addLayout(right_layout)
         self.setLayout(main_layout)
+
+    def showEvent(self, event):
+        """Se ejecuta cada vez que la ventana es mostrada para asegurarse de que se maximice."""
+        self.showMaximized()  # 🔹 Asegurar que se maximice cada vez que se muestra
+        super().showEvent(event)  # 🔹 Mantiene el comportamiento original del evento
 
 
     def volver_a_flujo(self):
@@ -186,28 +260,51 @@ class DeliveryValidationScreen(QWidget):
             QMessageBox.warning(self, "Advertencia", f"La factura {nro_factura} ya ha sido validada.")
             return
 
-
         url = f"http://127.0.0.1:5000/api/factura/{nro_factura}"
-        response = requests.get(url)
-
-        if response.status_code == 200:
-            data = response.json()
-            self.info_cliente.setText(f"Cliente: {data['cliente']}")
-            self.info_rut.setText(f"Rut: {data['rut']}")
-            self.info_facturador.setText(f"Facturador: {data['facturador']}")
-            self.info_kilos.setText(f"Total Kilos: {data['total kilos']}")
-            self.total_cajas.setText(f"Total cajas: {data['total Cajas']}")
+        
+        try:
+            response = requests.get(url)
+            response.raise_for_status()  # 🔹 Lanza una excepción si hay error en la solicitud
             
+            data = response.json()
 
+            # ✅ Guardar cliente en `self.clientes_por_factura`
+            cliente_rut = data.get("rut", "").strip()
+            cliente_nombre = data.get("cliente", "").strip()
+
+            self.clientes_por_factura[nro_factura] = {
+                "rut": cliente_rut,
+                "nombre": cliente_nombre
+            }
+
+            print(f"✅ Cliente Guardado para Factura {nro_factura}: {cliente_nombre} - {cliente_rut}")
+
+            # ✅ Mostrar en la interfaz
+            self.info_cliente.setText(f"Cliente: {cliente_nombre}")
+            self.info_rut.setText(f"Rut: {cliente_rut}")
+            self.info_facturador.setText(f"Facturador: {data.get('facturador', '')}")
+            self.info_kilos.setText(f"Total Kilos: {data.get('total kilos', '')}")
+            self.total_cajas.setText(f"{data.get('total Cajas', '')}")
+
+            # 🔹 Obtener detalles de la factura
             detalles_url = f"http://127.0.0.1:5000/api/factura/{nro_factura}/detalles"
             detalles_response = requests.get(detalles_url)
-            if detalles_response.status_code == 200:
-                detalles = detalles_response.json()
-                self.llenar_tabla(detalles)
-            else:
-                QMessageBox.warning(self, "Error", "No se encontraron detalles para la factura")
-        else:
-            QMessageBox.warning(self, "Error", "Factura no encontrada")
+            detalles_response.raise_for_status()  # 🔹 Lanza una excepción si hay error
+            
+            detalles = detalles_response.json()
+            self.llenar_tabla(detalles)
+
+            self.barra_entrada_pistola.setFocus()
+
+        except requests.exceptions.HTTPError as http_err:
+            QMessageBox.warning(self, "Error", f"HTTP error al buscar la factura: {http_err}")
+        except requests.exceptions.ConnectionError:
+            QMessageBox.warning(self, "Error", "Error de conexión con el servidor")
+        except requests.exceptions.Timeout:
+            QMessageBox.warning(self, "Error", "El servidor tardó demasiado en responder")
+        except requests.exceptions.RequestException as err:
+            QMessageBox.warning(self, "Error", f"Error inesperado: {err}")
+
     
     def factura_ya_validada(self, nro_factura):
         """ Verifica si una factura ya ha sido validada """
@@ -249,6 +346,8 @@ class DeliveryValidationScreen(QWidget):
                         alerta_mostrada = True
                     else:
                         checkbox.setChecked(True)
+                        self.etiquetas_validadas_factura_actual += 1
+                        self.actualizar_contador_factura_actual()
                         
                 break  # Salir del bucle tras encontrar el código
 
@@ -291,6 +390,30 @@ class DeliveryValidationScreen(QWidget):
             checkbox.setEnabled(False)
             self.tabla_etiquetas.setCellWidget(row, 4, checkbox)
 
+    def cargar_datos_factura(self, total_cajas):
+        """Carga el total de etiquetas desde la cabecera y lo mantiene hasta la validación."""
+        if self.total_etiquetas_factura_actual == 0:  # Solo se asigna al buscar la factura
+            self.total_etiquetas_factura_actual = total_cajas  
+            self.total_cajas.setText(f"{self.total_etiquetas_factura_actual}")  # ✅ Se mantiene fijo
+        self.actualizar_contador_factura_actual()
+
+    def actualizar_contador_etiquetas(self):
+        """Actualiza el contador de etiquetas validadas en la interfaz."""
+        self.contador_etiquetas_label.setText(f"N° Cajas: {self.total_etiquetas_validadas}")
+
+    def actualizar_contador_factura_actual(self):
+        """Solo actualiza el número de etiquetas validadas sin afectar el total."""
+        self.validadas_etiquetas_factura_label.setText(f"{self.etiquetas_validadas_factura_actual}")  # ✅ Se actualiza dinámicamente
+
+    def actualizar_contador_cajas(self):
+        """Recalcula el número total de etiquetas validadas y actualiza el contador."""
+        total_cajas = 0
+        for row in range(self.registro_validaciones.rowCount()):
+            nro_factura = self.registro_validaciones.item(row, 1).text() or ""
+            if nro_factura in self.etiquetas_por_factura:
+                total_cajas += len(self.etiquetas_por_factura[nro_factura]["validadas"])
+
+        self.contador_etiquetas_label.setText(f"N° Cajas: {total_cajas}")
 
     def factura_validada(self):
         nro_factura = self.factura_input.text()
@@ -304,7 +427,6 @@ class DeliveryValidationScreen(QWidget):
             if item and item.text() == nro_factura:
                 QMessageBox.warning(self, "Advertencia", f"La factura {nro_factura} ya ha sido validada.")
                 return  # Evitar duplicados
-
 
         # ✅ Guardamos etiquetas en `self.etiquetas_por_factura`
         self.etiquetas_por_factura[nro_factura] = {
@@ -336,15 +458,10 @@ class DeliveryValidationScreen(QWidget):
             estado = "Validada"
             detalle = "OK"
 
-        
-
-
         # 🔍 Debugging para verificar almacenamiento
         print(f"📌 Factura: {nro_factura}")
         print(f"✅ Etiquetas Validadas Guardadas: {self.etiquetas_por_factura[nro_factura]['validadas']}")
         print(f"⚠️ Etiquetas No Encontradas Guardadas: {self.etiquetas_por_factura[nro_factura]['no_encontradas']}")
-
-        
 
         etiquetas_faltantes = [
             self.tabla_etiquetas.item(row, 0).text()
@@ -373,10 +490,20 @@ class DeliveryValidationScreen(QWidget):
 
         print(f"📌 Cliente Registrado: {cliente}")
 
+        # Incrementar el contador de etiquetas validadas
+        self.total_etiquetas_validadas += len(self.etiquetas_por_factura[nro_factura]["validadas"])
+        self.actualizar_contador_etiquetas()
+
+        self.total_etiquetas_factura_actual = 0  # ✅ Se restablece el total solo cuando la factura es validada
+        self.etiquetas_validadas_factura_actual = 0
+        self.total_cajas.setText("0")  # ✅ Ahora sí se resetea
+        self.validadas_etiquetas_factura_label.setText("0")
+
         # Limpiar la tabla de etiquetas, pero no perder las etiquetas guardadas
         self.tabla_etiquetas.setRowCount(0)
         self.factura_input.clear()
         self.eliminar_button.setVisible(True)
+
 
     def mostrar_boton_eliminar(self):
         """ Muestra el botón de eliminar si hay facturas seleccionadas """
@@ -387,17 +514,46 @@ class DeliveryValidationScreen(QWidget):
         self.eliminar_button.setVisible(hay_seleccionadas)
 
     def eliminar_facturas(self):
-        """ Elimina facturas seleccionadas """
-        filas_a_eliminar = [
-            row for row in range(self.registro_validaciones.rowCount())
-            if self.registro_validaciones.cellWidget(row, 0).isChecked()
-        ]
+        """ Elimina las facturas seleccionadas y actualiza el contador de cajas. """
+        
+        filas_a_eliminar = []
+        
+        for row in range(self.registro_validaciones.rowCount()):
+            checkbox = self.registro_validaciones.cellWidget(row, 0)
+            if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+                filas_a_eliminar.append(row)
 
-        for row in reversed(filas_a_eliminar):  # Eliminar de atrás hacia adelante
+        if not filas_a_eliminar:
+            QMessageBox.warning(self, "Advertencia", "Seleccione al menos una factura para eliminar.")
+            return
+
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Icon.Question)
+        msg_box.setWindowTitle("Confirmación")
+        msg_box.setText("¿Está seguro de eliminar las facturas seleccionadas?")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setDefaultButton(QMessageBox.StandardButton.No)
+        respuesta = msg_box.exec()
+
+        if respuesta == QMessageBox.StandardButton.No:
+            return
+
+        # **Eliminar facturas seleccionadas de la tabla**
+        for row in reversed(filas_a_eliminar):  # 🔹 Recorrer de atrás hacia adelante para evitar errores de indexación
+            nro_factura = self.registro_validaciones.item(row, 1).text() or ""
+
+            # **Eliminar la factura de la estructura etiquetas_por_factura**
+            if nro_factura in self.etiquetas_por_factura:
+                del self.etiquetas_por_factura[nro_factura]
+
             self.registro_validaciones.removeRow(row)
 
-        self.eliminar_button.setVisible(False)  # Ocultar botón si ya no hay seleccionadas
-        
+        # **Actualizar contador de cajas después de eliminar**
+        self.actualizar_contador_cajas()
+
+        # **Ocultar botón si ya no hay facturas seleccionadas**
+        self.eliminar_button.setVisible(False)
+
 
     def limpiar_datos_cliente(self):
         """Limpia los datos del cliente en la interfaz."""
@@ -437,11 +593,13 @@ class DeliveryValidationScreen(QWidget):
             nro_factura = self.registro_validaciones.item(row, 1).text() or ""
             estado = self.registro_validaciones.item(row, 3).text() or ""
 
+            # ✅ Obtener cliente correcto desde `self.clientes_por_factura`
+            cliente_data = self.clientes_por_factura.get(nro_factura, {"rut": "N/A", "nombre": "Desconocido"})
+            cliente_rut = cliente_data["rut"]
+            cliente_nombre = cliente_data["nombre"]
+
             # ✅ Obtener etiquetas desde `self.etiquetas_por_factura`
             etiquetas = self.etiquetas_por_factura.get(nro_factura, {"validadas": [], "no_encontradas": []})
-
-            cliente_rut = self.info_rut.text().replace("Rut: ", "").strip()
-            cliente_nombre = self.info_cliente.text().replace("Cliente: ", "").strip()
 
             print(f"📌 Factura: {nro_factura}")
             print(f"📌 Cliente: {cliente_nombre} - RUT: {cliente_rut}")
@@ -490,8 +648,6 @@ class DeliveryValidationScreen(QWidget):
 
         self.registro_validaciones.setRowCount(0)
         self.main_app.regresar_a_home()
-
-
 
 
     def obtener_etiquetas_validadas(self):
